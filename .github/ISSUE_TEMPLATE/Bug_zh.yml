@@ -1,7 +1,8 @@
 name: 错误报告
 description: 报告 GitHub-NetDisk 中的问题
 title: "[Bug]: "
-labels: ["bug"]
+labels: ["Bug"]
+type: "Bug"
 
 body:
   - type: markdown
