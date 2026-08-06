@@ -25,7 +25,7 @@ from ..service.aria2_download_service import aria2DownloadService
 from ..common import resource
 from ..common.config import cfg
 from ..common.event_logger import (logAction, logChanged, logInitialized,
-                                   logReceived, logStarted)
+                                   logReceived, logStarted, logFailed)
 from ..service.github_service import getUserName, installGithubRateLimitMonitor
 from ..service.auth_service import authService
 from ..common.icon import Icon
