@@ -9,7 +9,7 @@ DEBUG = "__compiled__" not in globals()
 
 YEAR = 2026
 AUTHOR = "XiaoshuDeXiaowo"
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 # Human-readable maturity marker shown in the About and update UI.
 DEVELOPMENT_STAGE = "Alpha"
 APP_NAME = "GitHub NetDisk"
