@@ -8,8 +8,8 @@ on:
 jobs:
   windows:
     uses: ./.github/workflows/build-Windows.yml
-  windows-arm:
-    uses: ./.github/workflows/build-Windows-ARM.yml
+  # windows-arm:
+  #   uses: ./.github/workflows/build-Windows-ARM.yml
   linux:
     uses: ./.github/workflows/build-Linux.yml
   macos-arm:
