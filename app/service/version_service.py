@@ -34,8 +34,10 @@ class VersionService:
     def __init__(self):
         self.currentVersion = VERSION
         self.lastestVersion = VERSION
+        self.latestReleaseTitle = VERSION
         self.releaseUrl = RELEASE_URL
         self.installAsset = None
+        self.usingFallbackInstaller = False
         self.versionPattern = re.compile(r'v?(\d+)\.(\d+)\.(\d+)')
 
     @exceptionHandler(VERSION)
@@ -43,12 +45,24 @@ class VersionService:
         """ get latest version """
         release = self._latestRelease()
         self.releaseUrl = str(release.get('html_url') or RELEASE_URL)
-        self.installAsset = self.selectInstallerAsset(release.get('assets') or [])
+        self.installAsset = None
+        self.usingFallbackInstaller = False
         version = str(release.get('tag_name') or '')
         match = self.versionPattern.search(version)
         if not match:
             return VERSION
         self.lastestVersion = version.lstrip('v')
+        self.latestReleaseTitle = str(
+            release.get('name') or self.lastestVersion)
+        assets = release.get('assets') or []
+        self.installAsset = self.selectInstallerAsset(assets)
+        if self.installAsset is None and sys.platform == 'win32':
+            # Windows on ARM can run the x64 build through its compatibility
+            # layer. Prefer that release over reporting no installer at all.
+            if _normalizedArchitecture() == 'arm64':
+                self.installAsset = self.selectInstallerAsset(
+                    assets, system='win32', machine='x86_64')
+                self.usingFallbackInstaller = self.installAsset is not None
         return self.lastestVersion
 
     def hasNewVersion(self):

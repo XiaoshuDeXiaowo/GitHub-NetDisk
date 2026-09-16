@@ -142,6 +142,7 @@ class NetdiskTreeView(TreeView):
     """ a tree view for GitHub-NetDisk """
     repoLoaded = pyqtSignal(str)
     branchLoaded = pyqtSignal(str)
+    reloadFinished = pyqtSignal()
     loadError = pyqtSignal(object)
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent=parent)
@@ -344,6 +345,7 @@ class NetdiskTreeView(TreeView):
     def _onLoadFinished(self, f, w1, w2):
         self._restoreLoadUi(w1, w2)
         logSucceeded('Log.Action.Refresh', level='debug')
+        self.reloadFinished.emit()
 
     def _onLoadFailed(self, e, w1, w2, action_key='Log.Action.Refresh',
                       log_error=True):
@@ -394,4 +396,3 @@ class NetdiskTreeView(TreeView):
         return self._model.getBranch()
 
     branch = pyqtProperty(str, getBranch, setBranch)
-

@@ -4,9 +4,9 @@ from getpass import getuser
 from time import monotonic
 
 from loguru import logger
-from PyQt5.QtCore import QSize, Qt, QTimer
+from PyQt5.QtCore import QEvent, QSize, Qt, QTimer
 from PyQt5.QtGui import QIcon, QColor
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QWidget
 from pyqt5_concurrent.TaskExecutor import TaskExecutor
 from qfluentwidgets import (NavigationItemPosition, FluentWindow, SplashScreen,
                             InfoBar, InfoBarPosition, MessageBox)
@@ -30,7 +30,8 @@ from ..service.github_service import getUserName, installGithubRateLimitMonitor
 from ..service.auth_service import authService
 from ..common.icon import Icon
 from ..common.signal_bus import signalBus
-from ..common.setting import FEEDBACK_URL, localizedWebsiteUrl
+from ..common.setting import (DEVELOPMENT_STAGE, FEEDBACK_URL,
+                              localizedWebsiteUrl)
 from ..service.transfer_task_service import transferTaskService
 from ..service.version_service import versionService
 from ..common.translator import translate
@@ -41,9 +42,10 @@ from ..common.url_scheme import BrowseRepoRequest, NewTaskRequest, parse_app_url
 
 class MainWindow(FluentWindow):
 
-    def __init__(self):
+    def __init__(self, forced_username=None):
         super().__init__()
         self.tr = translate
+        self._forcedUsername = str(forced_username or '').strip()
         self._isQuitting = False
         self._cleanupDone = False
         self._lastGithubRateLimitInfoAt = 0.0
@@ -56,7 +58,8 @@ class MainWindow(FluentWindow):
         self.themeListener = SystemThemeListener(self)
 
         # create sub interface
-        self.homeInterface = HomeInterface(self)
+        self.homeInterface = HomeInterface(
+            self, forced_username=self._forcedUsername)
         self.browseInterface = BrowseInterface(self)
         self.taskInterface = TaskInterface(self)
         self.accountInterface = AccountInterface(self)
@@ -196,12 +199,29 @@ class MainWindow(FluentWindow):
         self._checkingUpdate = False
         logChanged('Log.Action.UpdateCheck', versionService.lastestVersion)
         if has_update:
+            if versionService.installAsset is None:
+                self.showMessage(
+                    self.tr('UpdateCheck.Unsupported.title'),
+                    self.tr(
+                        'UpdateCheck.Unsupported.text',
+                        (versionService.latestReleaseTitle,),
+                    ),
+                    showYesButton=True,
+                    showCancelButton=False,
+                )
+                return
+            latest_title = versionService.latestReleaseTitle
+            if versionService.usingFallbackInstaller:
+                latest_title = self.tr(
+                    'UpdateCheck.WindowsArmFallback.text',
+                    (latest_title,),
+                )
             if self.showMessage(
                     self.tr('UpdateCheck.NewVersion.title'),
                     self.tr(
                         'UpdateCheck.DownloadInstaller.text',
-                        (versionService.currentVersion,
-                         versionService.lastestVersion),
+                        (f'{DEVELOPMENT_STAGE} {versionService.currentVersion}',
+                         latest_title),
                     )):
                 self.downloadAndInstallUpdate()
             return
@@ -209,8 +229,9 @@ class MainWindow(FluentWindow):
             self.showMessage(
                 self.tr('UpdateCheck.NoUpdate.title'),
                 self.tr('UpdateCheck.NoUpdate.text',
-                        (versionService.currentVersion,)),
-                showYesButton=False,
+                        (f'{DEVELOPMENT_STAGE} {versionService.currentVersion}',)),
+                showYesButton=True,
+                showCancelButton=False,
             )
 
     def downloadAndInstallUpdate(self):
@@ -271,11 +292,14 @@ class MainWindow(FluentWindow):
         self._checkingUpdate = False
         logChanged('Log.Action.UpdateCheck', result.latest_version)
         if result.has_new_version:
+            latest_title = getattr(
+                result, 'latest_release_title', result.latest_version)
             if self.showMessage(
                     self.tr('UpdateCheck.NewVersion.title'),
                     self.tr(
                         'UpdateCheck.DownloadInstaller.text',
-                        (result.current_version, result.latest_version),
+                        (f'{result.current_version} ({DEVELOPMENT_STAGE})',
+                         latest_title),
                     )):
                 self.downloadAndInstallUpdate()
             return
@@ -286,7 +310,8 @@ class MainWindow(FluentWindow):
                     'UpdateCheck.NoUpdate.text',
                     (result.current_version,),
                 ),
-                showYesButton=False,
+                showYesButton=True,
+                showCancelButton=False,
             )
 
     def _onUpdateCheckFailed(self, error, silent=True):
@@ -350,6 +375,19 @@ class MainWindow(FluentWindow):
             else 'MenuBar.EnterFullScreen'
         )
         logAction('Log.Action.MenuBar', self.tr(action_key))
+
+        # AppKit owns the fullscreen transition on macOS.  Calling
+        # QWidget.showFullScreen()/showNormal() here leaves Qt's Cocoa cursor
+        # tracking in a stale state after the transition, so widgets keep the
+        # cursor shape that happened to be active while entering fullscreen.
+        # Use the same native transition as the macOS View menu instead.
+        if sys.platform == 'darwin':
+            native_window = self._nativeMacWindow()
+            if native_window is not None:
+                native_window.toggleFullScreen_(None)
+                self._scheduleCursorRefresh()
+                return
+
         if self.isFullScreen():
             self.showNormal()
         else:
@@ -432,6 +470,8 @@ class MainWindow(FluentWindow):
         QApplication.instance().quit()
 
     def refreshGitHubUserName(self):
+        if self._forcedUsername:
+            return
         token = authService.accessToken()
         if not token:
             return
@@ -524,7 +564,8 @@ class MainWindow(FluentWindow):
         else:
             self.switchTo(self.homeInterface)
 
-    def showMessage(self, title: str, content: str, showYesButton: bool = True, showCancelButton: bool = True):
+    def showMessage(self, title: str, content: str, showYesButton: bool = True,
+                    showCancelButton: bool = True):
         logAction('Log.Action.MessageBox', title)
         logger.info(self.tr('Log.App.ShowMessage', (title, content)))
         w = MessageBox(title=title, content=content, parent=self.window())
@@ -540,6 +581,38 @@ class MainWindow(FluentWindow):
         super().resizeEvent(e)
         if hasattr(self, 'splashScreen'):
             self.splashScreen.resize(self.size())
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() != QEvent.WindowStateChange:
+            return
+
+        # qframelesswindow handles the native title-bar geometry in its own
+        # changeEvent.  Re-apply explicit widget cursors after that work has
+        # completed so Cocoa starts using the cursor for the widget currently
+        # under the pointer again after a fullscreen transition.
+        if sys.platform == 'darwin':
+            self._scheduleCursorRefresh()
+            controller = getattr(self, 'nativeMenuController', None)
+            if controller is not None:
+                QTimer.singleShot(0, controller.updateViewMenu)
+
+    def _scheduleCursorRefresh(self):
+        """Refresh cursors before and after AppKit's fullscreen animation."""
+        QTimer.singleShot(0, self._refreshWidgetCursors)
+        # The first state-change event can arrive before the animation has
+        # finished, especially when leaving fullscreen.
+        QTimer.singleShot(350, self._refreshWidgetCursors)
+        QTimer.singleShot(800, self._refreshWidgetCursors)
+
+    def _refreshWidgetCursors(self):
+        """Re-register explicit child cursors after a macOS state change."""
+        for widget in (self, *self.findChildren(QWidget)):
+            if not widget.testAttribute(Qt.WA_SetCursor):
+                continue
+            cursor = widget.cursor()
+            widget.unsetCursor()
+            widget.setCursor(cursor)
 
     def closeEvent(self, event):
         if self._isQuitting:

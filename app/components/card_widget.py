@@ -1,6 +1,12 @@
 # coding: utf-8
 from PyQt5.QtCore import Qt, pyqtProperty
-from PyQt5.QtWidgets import QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import (
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 from qfluentwidgets import (
     BodyLabel,
     CaptionLabel,
@@ -42,6 +48,24 @@ class LinkCard(CardWidget):
 
     def setText(self, text: str):
         self.bodyLabel.setText(text)
+
+    def setEnabled(self, enabled: bool):
+        """Keep disabled choice cards visibly disabled as well as inert."""
+        super().setEnabled(enabled)
+        effect = self.graphicsEffect()
+        if enabled:
+            self.clearDisabledVisual()
+            return
+        if not isinstance(effect, QGraphicsOpacityEffect):
+            effect = QGraphicsOpacityEffect(self)
+            self.setGraphicsEffect(effect)
+        # Keep the card readable while still making it clearly unavailable.
+        effect.setOpacity(0.62)
+
+    def clearDisabledVisual(self):
+        """Detach the opacity effect before a dialog/widget is destroyed."""
+        if isinstance(self.graphicsEffect(), QGraphicsOpacityEffect):
+            self.setGraphicsEffect(None)
 
     def getText(self):
         return self.bodyLabel.text()

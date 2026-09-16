@@ -53,6 +53,8 @@ from ..components.ops_bar import OpsBar
 class BrowseInterface(QWidget):
     """Browse one GitHub-NetDisk repository at a time."""
 
+    MAX_SPLITTER_WIDTH = 1200
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.tr = translate
@@ -75,20 +77,21 @@ class BrowseInterface(QWidget):
         self.branchSelector.setPlaceholderText(self.tr('BrowseInterface.BranchSelector.placeholder'))
         self.opsBar = OpsBar(self)
         self.opsBar.setEnabled(False)
+        self.vBoxLayout.setContentsMargins(36, 42, 36, 30)
+        self.vBoxLayout.setSpacing(12)
 
         self.treeView = NetdiskTreeView(self)
         self.fileInfoCard = FileInfoCard(self)
         self.splitter = QSplitter(Qt.Horizontal, self)
         self.splitter.addWidget(self.treeView)
         self.splitter.addWidget(self.fileInfoCard)
-        self.splitter.setSizes([cfg.get(cfg.treeWidth), cfg.get(cfg.fileCardWidth)])
+        self.splitter.setMaximumWidth(self.MAX_SPLITTER_WIDTH)
+        self.splitter.setSizes(self._restoredSplitterSizes())
         self.splitter.setChildrenCollapsible(False)
 
         self.repoLayout.addWidget(self.repoEdit, 1)
         self.repoLayout.addWidget(self.goButton)
         self.repoLayout.addWidget(self.branchSelector)
-        self.vBoxLayout.setContentsMargins(36, 42, 36, 30)
-        self.vBoxLayout.setSpacing(12)
         self.vBoxLayout.addWidget(self.titleLabel)
         self.vBoxLayout.addLayout(self.repoLayout)
         self.vBoxLayout.addWidget(self.opsBar)
@@ -99,6 +102,7 @@ class BrowseInterface(QWidget):
         self.branchSelector.currentTextChanged.connect(self.onBranchChanged)
         self.treeView.repoLoaded.connect(self.onRepoLoaded)
         self.treeView.branchLoaded.connect(self.onBranchLoaded)
+        self.treeView.reloadFinished.connect(self._onTreeReloaded)
         self.treeView.loadError.connect(self.onLoadError)
         self.treeView.selectionModel().currentChanged.connect(self.onSelectionChanged)
         signalBus.browseRepo.connect(self.browse)
@@ -115,6 +119,25 @@ class BrowseInterface(QWidget):
         signalBus.cancelTaskSig.connect(self._cancelTransfer)
         signalBus.copyLinkSig.connect(self.copySelectedLink)
         logInitialized('Log.Action.BrowseRepository')
+
+    def _restoredSplitterSizes(self):
+        """Return saved splitter sizes without restoring a stale fullscreen width."""
+        tree_width = max(1, int(cfg.get(cfg.treeWidth)))
+        file_card_width = max(1, int(cfg.get(cfg.fileCardWidth)))
+
+        # Older versions saved FileInfoCard's fullscreen width.  Limit only
+        # the initial restore to a proportion of the normal window so that a
+        # stale value cannot make the card dominate the browser.  A normal
+        # user-selected width is left untouched when it is within that range.
+        parent = self.parentWidget()
+        normal_width = parent.width() if parent is not None else 0
+        if normal_width > 0:
+            margins = self.vBoxLayout.contentsMargins()
+            splitter_width = max(0, normal_width - margins.left() - margins.right())
+            max_card_width = max(400, int(splitter_width * 0.70))
+            file_card_width = min(file_card_width, max_card_width)
+
+        return [tree_width, file_card_width]
 
     def browse(self, repo: str, branch: str = ''):
         logReceived('Log.Action.BrowseRepository', repo or '/')
@@ -167,11 +190,7 @@ class BrowseInterface(QWidget):
         self.fileInfoCard.showRepository(repo, current)
         writable = hasWriteAccess(repo, authService.accessToken())
         self.opsBar.addObjBtn.setEnabled(writable)
-        self.opsBar.renameAction.setEnabled(writable)
-        self.opsBar.deleteAction.setEnabled(writable)
-        self.opsBar.downloadAction.setEnabled(False)
-        self.opsBar.copyLinkAction.setEnabled(False)
-        self.opsBar.copyDirectLinkAction.setEnabled(False)
+        self._resetSelectionUi()
         if switching_branch:
             return
         self._continueQueuedOrPending()
@@ -182,6 +201,7 @@ class BrowseInterface(QWidget):
         self.branchSelector.setCurrentText(branch)
         self.branchSelector.blockSignals(False)
         self.fileInfoCard.showRepository(netdiskService.getRepo(), branch)
+        self._resetSelectionUi()
         self._continueQueuedOrPending()
 
     def _continueQueuedOrPending(self):
@@ -374,9 +394,11 @@ class BrowseInterface(QWidget):
 
     def onSelectionChanged(self, current, previous):
         path = self.selectedPath()
-        if path:
-            logSelected('Log.Action.FileSelection', path)
-            self.fileInfoCard.path = path
+        if not path:
+            self._resetSelectionUi()
+            return
+        logSelected('Log.Action.FileSelection', path)
+        self.fileInfoCard.path = path
         has_repo = bool(netdiskService.getRepo())
         self.opsBar.setEnabled(has_repo and not self._busy)
         if not has_repo:
@@ -385,10 +407,48 @@ class BrowseInterface(QWidget):
         self.opsBar.downloadAction.setEnabled(bool(path))
         is_file = bool(path) and netdiskService.isFile(path)
         self.opsBar.copyLinkAction.setEnabled(is_file)
-        self.opsBar.copyDirectLinkAction.setEnabled(
-            is_file and int(netdiskService.getContent(path).get(':size', 0) or 0) < MAX_ASSET_SIZE)
+        if is_file:
+            metadata = netdiskService.getContent(path)
+            assets = metadata.get(':assets') or [posixpath.basename(path)]
+            direct_link_available = (
+                int(metadata.get(':size', 0) or 0) < MAX_ASSET_SIZE
+                and len(assets) == 1
+            )
+        else:
+            direct_link_available = False
+        self.opsBar.copyDirectLinkAction.setEnabled(direct_link_available)
         self.opsBar.renameAction.setEnabled(bool(path) and writable)
         self.opsBar.deleteAction.setEnabled(bool(path) and writable)
+
+    def _resetSelectionUi(self):
+        """Clear selection-dependent state after a model/repository refresh.
+
+        A model reset can invalidate the current index without emitting
+        ``currentChanged``.  Keeping the old ``FileInfoCard`` and enabled
+        actions in that case makes buttons appear usable while their handlers
+        have no selected path.  Always restore the repository summary and
+        disable every file-only operation when no path is selected.
+        """
+        repository = netdiskService.getRepo()
+        if repository:
+            self.fileInfoCard.showRepository(repository, netdiskService.getBranch())
+        else:
+            self.fileInfoCard.clearRepository()
+        self.opsBar.downloadAction.setEnabled(False)
+        self.opsBar.copyLinkAction.setEnabled(False)
+        self.opsBar.copyDirectLinkAction.setEnabled(False)
+        self.opsBar.renameAction.setEnabled(False)
+        self.opsBar.deleteAction.setEnabled(False)
+        self.opsBar.setEnabled(bool(repository) and not self._busy)
+
+    def _onTreeReloaded(self):
+        # Do not retain a stale selection across a refresh.  Clearing both the
+        # selection and current index also makes the behavior deterministic on
+        # Qt versions that preserve the old current index during modelReset.
+        selection_model = self.treeView.selectionModel()
+        selection_model.clearSelection()
+        selection_model.clearCurrentIndex()
+        self._resetSelectionUi()
 
     def _run(self, function, success_text: str, action_key: str):
         logStarted(action_key)
@@ -437,7 +497,7 @@ class BrowseInterface(QWidget):
     def _finishOperation(self, text: str, action_key: str):
         logSucceeded(action_key)
         self._busy = False
-        self.opsBar.setEnabled(bool(netdiskService.getRepo()))
+        self._resetSelectionUi()
         self.treeView.reload()
         InfoBar.success(self.tr('Common.Success'), text, duration=2500, parent=self.window())
 
@@ -841,6 +901,10 @@ class BrowseInterface(QWidget):
                 'Log.Action.Repository',
                 self._repositoryErrorText(error, repository),
             )
+        # Refresh/branch failures do not carry an opening repository marker,
+        # but they can still leave an invalid current index.  Reset in both
+        # cases so action buttons and the information card stay coherent.
+        self._resetSelectionUi()
         self.showError(error, repository)
 
     def _repositoryErrorText(self, error, repository):
@@ -866,5 +930,3 @@ class BrowseInterface(QWidget):
         self.goButton.setEnabled(True)
         self.opsBar.setEnabled(bool(netdiskService.getRepo()))
         InfoBar.error(title, message, duration=6000, parent=self.window())
-
-

@@ -14,6 +14,7 @@ def test_version_service_reads_latest_release(monkeypatch):
         def json(self):
             return {
                 'tag_name': 'v1.2.0',
+                'name': 'Alpha Release 1.2.0',
                 'html_url': 'https://example.test/releases/v1.2.0',
                 'assets': [{
                     'name': 'GitHub-NetDisk-v1.2.0-Windows-x86_64-Setup.exe',
@@ -37,6 +38,7 @@ def test_version_service_reads_latest_release(monkeypatch):
 
     assert service.hasNewVersion()
     assert service.lastestVersion == '1.2.0'
+    assert service.latestReleaseTitle == 'Alpha Release 1.2.0'
     assert service.installAsset['browser_download_url'].endswith('setup.exe')
     assert calls[0][1]['timeout'] == 5
 
@@ -55,6 +57,92 @@ def test_version_service_selects_platform_installer():
         assets, system='darwin', machine='arm64')['name'].endswith('.dmg')
     assert service.selectInstallerAsset(
         assets, system='linux', machine='aarch64')['name'].endswith('.deb')
+
+
+def test_windows_arm_uses_x64_installer_as_fallback(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                'tag_name': 'v1.2.0',
+                'name': 'Alpha Release 1.2.0',
+                'assets': [{
+                    'name': 'GitHub-NetDisk-v1.2.0-Windows-x86_64-Setup.exe',
+                }],
+            }
+
+    monkeypatch.setattr(
+        'app.service.version_service.requests.get',
+        lambda *args, **kwargs: Response(),
+    )
+    monkeypatch.setattr('app.service.version_service.sys.platform', 'win32')
+    monkeypatch.setattr(
+        'app.service.version_service.platform.machine',
+        lambda: 'ARM64',
+    )
+
+    service = VersionService()
+    service.currentVersion = '1.0.0'
+
+    assert service.hasNewVersion()
+    assert service.usingFallbackInstaller is True
+    assert 'x86_64' in service.installAsset['name']
+
+
+def test_update_prompt_uses_release_title_and_development_stage(monkeypatch):
+    messages = []
+    window = SimpleNamespace(
+        _checkingUpdate=True,
+        tr=lambda key, args=(): {
+            'UpdateCheck.DownloadInstaller.text':
+            'current=%s latest=%s',
+            'UpdateCheck.NewVersion.title': 'new',
+        }.get(key, key) % args if args else key,
+        showMessage=lambda *args, **kwargs: messages.append((args, kwargs)) or False,
+    )
+    service = SimpleNamespace(
+        currentVersion='1.0.0',
+        lastestVersion='1.2.0',
+        latestReleaseTitle='Alpha Release 1.2.0',
+        installAsset={'name': 'installer'},
+        usingFallbackInstaller=False,
+    )
+    monkeypatch.setattr('app.view.main_window.versionService', service)
+    monkeypatch.setattr(
+        'app.view.main_window.logChanged', lambda *args, **kwargs: None)
+
+    MainWindow.onVersionInfoFetched(window, True)
+
+    assert messages[0][0][1] == 'current=1.0.0 (Alpha) latest=Alpha Release 1.2.0'
+
+
+def test_update_prompt_explains_when_no_binary_is_available(monkeypatch):
+    messages = []
+    window = SimpleNamespace(
+        _checkingUpdate=True,
+        tr=lambda key, args=(): key,
+        showMessage=lambda *args, **kwargs: messages.append((args, kwargs)),
+    )
+    service = SimpleNamespace(
+        currentVersion='1.0.0',
+        lastestVersion='1.2.0',
+        latestReleaseTitle='Alpha Release 1.2.0',
+        installAsset=None,
+        usingFallbackInstaller=False,
+    )
+    monkeypatch.setattr('app.view.main_window.versionService', service)
+    monkeypatch.setattr(
+        'app.view.main_window.logChanged', lambda *args, **kwargs: None)
+
+    MainWindow.onVersionInfoFetched(window, True)
+
+    assert messages[0][0][:2] == (
+        'UpdateCheck.Unsupported.title',
+        'UpdateCheck.Unsupported.text',
+    )
+    assert messages[0][1]['showCancelButton'] is False
 
 
 def test_download_installer_uses_update_folder(monkeypatch, tmp_path):
@@ -119,7 +207,8 @@ def test_update_check_no_update_shows_message(monkeypatch):
         'UpdateCheck.NoUpdate.title',
         'UpdateCheck.NoUpdate.text',
     )
-    assert messages[0][1]['showYesButton'] is False
+    assert messages[0][1]['showYesButton'] is True
+    assert messages[0][1]['showCancelButton'] is False
 
 
 def test_update_download_infobar_is_not_closable(monkeypatch):

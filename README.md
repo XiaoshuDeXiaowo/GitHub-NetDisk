@@ -49,6 +49,13 @@ To enable accelerated downloads with aria2, install `aria2c` and make sure it is
 python GitHub-NetDisk.py
 ```
 
+To open the setup guide even after the first launch, pass
+`--force-enter-guidewindow` (the switch is case-insensitive):
+
+```shell
+python GitHub-NetDisk.py --force-enter-guidewindow
+```
+
 On first launch, connecting an account through GitHub App Device Flow is recommended. You can also continue without signing in and use read-only mode. Personal Access Token is available only as an advanced compatibility option, and credentials are stored in the operating-system credential vault.
 
 ## Application links

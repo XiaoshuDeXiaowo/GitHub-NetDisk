@@ -40,7 +40,12 @@ if sys.platform == 'win32':
     from qframelesswindow.utils.win32_utils import isWin7
 
 from app.common import resource, exception_hook
-from app.common.application import SingletonApplication
+from app.common.application import (
+    SingletonApplication,
+    configureApplicationLanguageDialogs,
+    getForcedUsernameArgument,
+    hasForceGuideWindowArgument,
+)
 from app.common.config import cfg
 from app.common.translator import JsonTranslator, translate
 from app.components.native_menu import (
@@ -67,6 +72,7 @@ startup_app_name = startup_translator.tr('App.Name') or APP_NAME
 prepareMacApplicationName(startup_app_name)
 QApplication.setApplicationName(startup_app_name)
 QApplication.setApplicationDisplayName(startup_app_name)
+configureApplicationLanguageDialogs(cfg.get(cfg.language).name())
 try:
     app = SingletonApplication(sys.argv, APP_ID)
     app.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings)
@@ -111,10 +117,12 @@ try:
     # create main window
     startup_message = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else ''
     has_app_link = 'github-netdisk://' in startup_message.lower()
-    if cfg.get(cfg.firstUse) and not has_app_link:
-        w = GuideWindow()
+    force_enter_guidewindow = hasForceGuideWindowArgument(sys.argv)
+    forced_username = getForcedUsernameArgument(sys.argv)
+    if force_enter_guidewindow or (cfg.get(cfg.firstUse) and not has_app_link):
+        w = GuideWindow(forced_username=forced_username)
     else:
-        w = MainWindow()
+        w = MainWindow(forced_username=forced_username)
         app.aboutToQuit.connect(w.onExit)
     w.show()
     if isinstance(w, MainWindow) and startup_message:

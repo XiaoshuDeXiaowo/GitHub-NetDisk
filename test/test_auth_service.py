@@ -90,7 +90,7 @@ def test_device_flow_requires_a_configured_client_id():
         service.requestDeviceCode()
 
 
-def test_request_device_code_uses_only_the_public_client_id():
+def test_request_device_code_uses_public_client_id_with_repo_scope():
     http = FakeHttp({
         'device_code': 'device-secret',
         'user_code': 'ABCD-EFGH',
@@ -104,9 +104,12 @@ def test_request_device_code_uses_only_the_public_client_id():
 
     assert session.user_code == 'ABCD-EFGH'
     assert http.calls == [(
-        auth_module.DEVICE_CODE_URL,
-        {
-            'data': {'client_id': 'Iv1.public'},
+            auth_module.DEVICE_CODE_URL,
+            {
+                'data': {
+                    'client_id': 'Iv1.public',
+                    'scope': 'repo',
+                },
             'headers': {'Accept': 'application/json'},
             'timeout': 15,
         },

@@ -340,7 +340,7 @@ def test_public_download_link_uses_fastest_proxy_node(disk, monkeypatch):
         '/docs/readme.txt',
         status=lambda key, args: statuses.append((key, args)),
     ) == (
-        'https://fast.example/' + asset.browser_download_url
+        'http://fast.example//owner/repo/releases/download/release-1/readme.txt'
     )
     assert statuses == [
         ('TaskInterface.ResolvingDownloadLink', ()),

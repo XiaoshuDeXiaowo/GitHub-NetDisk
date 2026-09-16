@@ -49,6 +49,13 @@ python -m pip install .
 python GitHub-NetDisk.py
 ```
 
+如果需要在首次启动后再次打开设置向导，可以添加
+`--force-enter-guidewindow` 参数（参数不区分大小写）：
+
+```shell
+python GitHub-NetDisk.py --force-enter-guidewindow
+```
+
 首次启动时推荐通过 GitHub App Device Flow 连接账号，也可以暂不登录并以只读模式使用。Personal Access Token 仅作为高级兼容选项；凭据保存在操作系统凭据库中。
 
 ## 应用链接

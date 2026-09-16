@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from getpass import getuser
 from ..common.utils import lru_cache_noexcept as lru_cache
 from time import monotonic
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 from loguru import logger
 from github import Auth, Github
 from PyQt5.QtGui import QPixmap, QImage
@@ -288,8 +288,9 @@ def apiUrl():
 
 
 def githubProxyUrl(target_url: str, mirror: str) -> str:
-    """Build a ghproxy-next URL while preserving the complete source URL."""
-    return f'https://{mirror}/{target_url}' if mirror else target_url
+    """Build a ghproxy URL while preserving the complete source URL."""
+    url_path = urlunsplit(urlsplit(target_url)._replace(scheme='', netloc=''))
+    return f'http://{mirror}/{url_path}' if mirror else target_url
 
 
 def _measureGithubMirrorSpeed(mirror: str, target_url: str):

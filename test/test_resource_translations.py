@@ -36,6 +36,7 @@ def test_compiled_resources_include_current_translation_keys():
     assert data['UpdateCheck.NewVersion.title'] == '发现新版本'
     assert data['UpdateCheck.InstallerStarted.title'] == '安装程序已启动'
     assert data['GuideWindow.githubAppCardWidget.title'] == '连接 GitHub App（推荐）'
+    assert '请遵守 GitHub 服务条款' in data['GuideWindow.Disclaimer']
     assert data['AccountInterface.PAT.Title'] == 'Personal Access Token'
 
 

@@ -29,7 +29,8 @@ def test_native_windows_arm_build_uses_matching_msys2_compiler(monkeypatch):
     command = deploy.createBuildCommand('win32')
 
     assert '--msvc=latest' not in command
-    assert '--plugin-enable=pyqt5' in command
+    assert '--plugin-enable=pyqt5' not in command
+    assert '--windows-target-version=win7' in command
 
 
 def test_macos_bundle_contains_target_language_display_names(tmp_path):
@@ -72,4 +73,3 @@ def test_windows_version_resources_are_language_specific():
     assert 'GitHub 網盤'.encode('utf-16le') in traditional
     assert 'GitHub NetDisk'.encode('utf-16le') in english
     assert struct.pack('<HH', 0x0804, 1200) in simplified
-

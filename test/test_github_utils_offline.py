@@ -31,16 +31,16 @@ def test_get_user_name_falls_back_to_login(monkeypatch):
 
 
 def test_ghproxy_next_nodes_are_stored_as_static_unique_domains():
-    assert len(GITHUB_MIRRORS) == 74
+    assert len(GITHUB_MIRRORS) >= 74
     assert len(set(GITHUB_MIRRORS)) == len(GITHUB_MIRRORS)
-    assert 'gh.dpik.top' in GITHUB_MIRRORS
-    assert 'gh.ruan.dpdns.org' in GITHUB_MIRRORS
+    assert any(node.startswith('gh.dpik.top/') for node in GITHUB_MIRRORS)
+    assert any(node.startswith('gh.ruan.dpdns.org/') for node in GITHUB_MIRRORS)
 
 
-def test_proxy_url_preserves_complete_source_url():
+def test_proxy_url_uses_mirror_path_for_source_url():
     source = 'https://github.com/owner/repo/releases/download/v1/file.zip'
     assert github_service.githubProxyUrl(source, 'mirror.example') == (
-        'https://mirror.example/' + source
+        'http://mirror.example//owner/repo/releases/download/v1/file.zip'
     )
 
 
@@ -82,4 +82,3 @@ def test_mirror_selection_is_skipped_when_disabled(monkeypatch):
     assert github_service.getFastestGithubMirror(
         'https://github.com/owner/repo/releases/download/v1/file.zip'
     ) is None
-

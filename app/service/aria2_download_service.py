@@ -6,6 +6,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -100,6 +101,32 @@ class Aria2DownloadService:
                 args.extend(['--header', f'{name}: {value}'])
         return args
 
+    @staticmethod
+    def _popen_kwargs():
+        """Return process options that keep aria2c out of the user's UI.
+
+        ``aria2c`` is a console executable.  When it is launched from a
+        packaged GUI application on Windows, inheriting the parent's console
+        (or creating a new one) causes a visible black window for every
+        asset.  ``CREATE_NO_WINDOW`` handles modern Windows versions while
+        the hidden ``STARTUPINFO`` flags cover older systems such as Windows
+        7.  Keep the options platform-specific so tests and Unix builds do
+        not depend on Windows-only subprocess attributes.
+        """
+        options = {}
+        if sys.platform == 'win32':
+            options['creationflags'] = getattr(
+                subprocess, 'CREATE_NO_WINDOW', 0)
+            startup_info_factory = getattr(subprocess, 'STARTUPINFO', None)
+            if startup_info_factory is not None:
+                startup_info = startup_info_factory()
+                startup_info.dwFlags |= getattr(
+                    subprocess, 'STARTF_USESHOWWINDOW', 0)
+                startup_info.wShowWindow = getattr(
+                    subprocess, 'SW_HIDE', 0)
+                options['startupinfo'] = startup_info
+        return options
+
     def download(self, links, destination, total=0, progress=None,
                  headers=None, status=None, cancel_event=None):
         """Download assets concurrently via separate aria2c processes."""
@@ -124,6 +151,7 @@ class Aria2DownloadService:
                     stderr=subprocess.STDOUT,
                     text=True,
                     bufsize=1,
+                    **self._popen_kwargs(),
                 )
                 processes.append(proc)
                 with self._lock:
@@ -210,5 +238,4 @@ class Aria2DownloadService:
 
 
 aria2DownloadService = Aria2DownloadService()
-
 

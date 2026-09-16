@@ -3,14 +3,14 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "github-netdisk"
+name = "GitHub-NetDisk"
 version = "0.0.1"
 description = "A Fluent desktop cloud-drive client backed by GitHub Release"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { file = "LICENSE" }
 authors = [
-    { name = "XiaoshuDeXiaowo" },
+    { name = "XiaoshuDeXiaowo", email = "xiaoshu312@xiaoshu312.top" },
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -23,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
     "PyQt5>=5.15.2",

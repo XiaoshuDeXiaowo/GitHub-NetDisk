@@ -18,8 +18,9 @@ from ..common.config import cfg, isWin11
 from ..service.aria2_download_service import aria2DownloadService
 from ..common.event_logger import logAction, logChanged, logInitialized
 from ..common.icon import Icon
-from ..common.setting import (AUTHOR, AUTHOR_URL, FEEDBACK_URL,
-                              LICENSE_URL, REPO_URL, VERSION, YEAR,
+from ..common.setting import (AUTHOR, AUTHOR_URL, DEVELOPMENT_STAGE,
+                              FEEDBACK_URL, LICENSE_URL, REPO_URL, VERSION,
+                              YEAR,
                               localizedWebsiteUrl)
 from ..common.signal_bus import signalBus
 from ..common.style_sheet import StyleSheet
@@ -182,7 +183,8 @@ class SettingInterface(ScrollArea):
             ':/app/images/logo.png',
             self.tr('SettingInterface.About.title'),
             (f'{self.tr("SettingInterface.About.text")} · '
-             f'{self.tr("SettingInterface.About.Version")} {VERSION} · '
+             f'{self.tr("SettingInterface.About.Version")} {DEVELOPMENT_STAGE} '
+             f'{VERSION} · '
              f'© {self.tr("SettingInterface.About.Copyright")} {YEAR}, {AUTHOR}'),
             self.aboutGroup
         )
@@ -423,4 +425,3 @@ class SettingInterface(ScrollArea):
     def onFeedback(self):
         logAction('Log.Action.Feedback', FEEDBACK_URL)
         QDesktopServices.openUrl(QUrl(FEEDBACK_URL))
-

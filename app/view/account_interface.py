@@ -56,6 +56,7 @@ class AccountInterface(ScrollArea):
 
         self.titleLabel = TitleLabel(
             self.tr('AccountInterface.Account'), self.scrollWidget)
+        self._initSessionCard()
         self._initGithubAppCard()
         self._initPatCard()
 
@@ -63,6 +64,8 @@ class AccountInterface(ScrollArea):
         self.vBoxLayout.setSpacing(0)
         self.vBoxLayout.addWidget(self.titleLabel)
         self.vBoxLayout.addSpacing(24)
+        self.vBoxLayout.addWidget(self.sessionCard)
+        self.vBoxLayout.addSpacing(20)
         self.vBoxLayout.addWidget(self.appCard)
         self.vBoxLayout.addSpacing(28)
         self.vBoxLayout.addWidget(self.patCard)
@@ -77,6 +80,27 @@ class AccountInterface(ScrollArea):
 
         self.refreshStatus()
         logInitialized('Log.Action.Account')
+
+    def _initSessionCard(self):
+        """Create a provider-neutral card for the active login session."""
+        self.sessionCard = SimpleCardWidget(self.scrollWidget)
+        layout = QHBoxLayout(self.sessionCard)
+        layout.setContentsMargins(24, 18, 24, 18)
+        layout.setSpacing(16)
+        textLayout = QVBoxLayout()
+        textLayout.setSpacing(4)
+        self.sessionTitleLabel = StrongBodyLabel(
+            self.tr('AccountInterface.Session.Title'), self.sessionCard)
+        self.sessionStatusLabel = BodyLabel(self.sessionCard)
+        self.sessionStatusLabel.setWordWrap(True)
+        textLayout.addWidget(self.sessionTitleLabel)
+        textLayout.addWidget(self.sessionStatusLabel)
+        self.logoutButton = PushButton(
+            self.tr('AccountInterface.Logout'), self.sessionCard)
+        self.logoutButton.setEnabled(False)
+        layout.addLayout(textLayout, 1)
+        layout.addWidget(self.logoutButton, 0, Qt.AlignVCenter)
+        self.logoutButton.clicked.connect(self.logout)
 
     def _initGithubAppCard(self):
         self.appCard = SimpleCardWidget(self.scrollWidget)
@@ -100,12 +124,10 @@ class AccountInterface(ScrollArea):
             self.tr('AccountInterface.GitHubApp.CopyCode'), self.appCard)
         self.manageButton = PushButton(
             self.tr('AccountInterface.GitHubApp.Manage'), self.appCard)
-        self.logoutButton = PushButton(
-            self.tr('AccountInterface.Logout'), self.appCard)
         self.copyCodeButton.setEnabled(False)
         for button in (
                 self.connectButton, self.copyCodeButton,
-                self.manageButton, self.logoutButton):
+                self.manageButton):
             self.appButtonLayout.addWidget(button)
         self.appButtonLayout.addStretch(1)
         self.appCardLayout.addWidget(self.appTitleLabel)
@@ -187,13 +209,21 @@ class AccountInterface(ScrollArea):
         authenticated = authService.isAuthenticated()
         login = self._currentLogin()
         mode = authService.mode()
-        if authenticated and mode == AUTH_GITHUB_APP:
-            text = self.tr('AccountInterface.LoggedInGitHubApp', (login,))
-        elif authenticated:
-            text = self.tr('AccountInterface.LoggedInPAT', (login,))
+        app_connected = authenticated and mode == AUTH_GITHUB_APP
+        if app_connected:
+            app_text = self.tr('AccountInterface.LoggedInGitHubApp', (login,))
         else:
-            text = self.tr('AccountInterface.NotLoggedIn')
-        self.statusLabel.setText(text)
+            app_text = self.tr('AccountInterface.GitHubApp.NotConnected')
+        self.statusLabel.setText(app_text)
+        if authenticated:
+            session_text = self.tr(
+                'AccountInterface.LoggedInGitHubApp'
+                if mode == AUTH_GITHUB_APP else 'AccountInterface.LoggedInPAT',
+                (login,),
+            )
+        else:
+            session_text = self.tr('AccountInterface.NotLoggedIn')
+        self.sessionStatusLabel.setText(session_text)
         self.logoutButton.setEnabled(authenticated)
         logChanged('Log.Action.Account', login if authenticated else '-', level='debug')
 
@@ -219,6 +249,8 @@ class AccountInterface(ScrollArea):
         self.saveButton.setEnabled(False)
         self.statusLabel.setText(
             self.tr('AccountInterface.GitHubApp.Requesting'))
+        self.sessionStatusLabel.setText(
+            self.tr('AccountInterface.GitHubApp.Requesting'))
         future = TaskExecutor.run(authService.requestDeviceCode)
         future.result.connect(self._deviceCodeReady)
         future.failed.connect(self._deviceLoginFailed)
@@ -232,6 +264,8 @@ class AccountInterface(ScrollArea):
         self.deviceCodeLabel.show()
         self.copyCodeButton.setEnabled(True)
         self.statusLabel.setText(
+            self.tr('AccountInterface.GitHubApp.Waiting'))
+        self.sessionStatusLabel.setText(
             self.tr('AccountInterface.GitHubApp.Waiting'))
         self.copyDeviceCode()
         logAction('Log.Action.OpenLink', session.verification_uri)
@@ -253,6 +287,12 @@ class AccountInterface(ScrollArea):
         except Exception as error:
             self._deviceLoginFailed(error)
             return
+        # Device Flow only authenticates the user.  The GitHub App still has
+        # to be installed and granted access to the target repositories, so
+        # take the user directly to the installation page after authorization.
+        installation_url = authService.installationUrl()
+        logAction('Log.Action.OpenLink', installation_url)
+        openUrl(installation_url)
         self.connectButton.setEnabled(True)
         self.saveButton.setEnabled(True)
         self.copyCodeButton.setEnabled(False)

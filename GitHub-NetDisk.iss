@@ -8,21 +8,21 @@
   #define MyArtifactArch "x86_64"
 #endif
 
-#define MyAppName "GitHub-NetDisk"
+#define MyAppName "GitHub NetDisk"
 #define MyAppPublisher "XiaoshuDeXiaowo"
 #define MyAppURL "https://github-netdisk.top/"
 #define MyAppExeName "GitHub-NetDisk.exe"
 
 [Setup]
 AppId={{A7A14388-E12C-4F84-B7D3-241552CD45CA}
-AppName={#MyAppName}
+AppName={cm:AppDisplayName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\GitHub-NetDisk
-DefaultGroupName=GitHub-NetDisk
+DefaultGroupName={cm:AppDisplayName}
 DisableProgramGroupPage=yes
 LicenseFile=LICENSE
 OutputDir=dist
@@ -40,6 +40,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "chinesetraditional"; MessagesFile: "compiler:Languages\ChineseTraditional.isl"
 
+[CustomMessages]
+english.AppDisplayName=GitHub NetDisk
+chinesesimplified.AppDisplayName=GitHub 网盘
+chinesetraditional.AppDisplayName=GitHub 網盤
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
@@ -47,8 +52,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "dist\GitHub-NetDisk.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{cm:AppDisplayName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\{cm:AppDisplayName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Registry]
 Root: HKA; Subkey: "Software\Classes\github-netdisk"; ValueType: string; ValueName: ""; ValueData: "URL:GitHub-NetDisk Protocol"; Flags: uninsdeletekey
@@ -57,4 +62,4 @@ Root: HKA; Subkey: "Software\Classes\github-netdisk\DefaultIcon"; ValueType: str
 Root: HKA; Subkey: "Software\Classes\github-netdisk\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{cm:AppDisplayName}}"; Flags: nowait postinstall skipifsilent

@@ -33,9 +33,10 @@ from ..service.auth_service import authService
 class HomeInterface(ScrollArea):
     """Welcome, quick actions and a manually managed repository grid."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, forced_username=None):
         super().__init__(parent=parent)
         self.tr = translate
+        self._forcedUsername = str(forced_username or '').strip()
         self.scrollWidget = QWidget(self)
         self.vBoxLayout = QVBoxLayout(self.scrollWidget)
         self.quickWidget = QWidget(self.scrollWidget)
@@ -45,11 +46,7 @@ class HomeInterface(ScrollArea):
         self.cardsLayout = AdaptiveFlowLayout(self.cardsWidget, needAni=False)
 
         self.titleLabel = TitleLabel(self.tr('HomeInterface.Home'), self.scrollWidget)
-        user = (
-            cfg.get(cfg.usernameCache) or getuser()
-            if authService.isAuthenticated()
-            else getuser()
-        )
+        user = self._displayUserName()
         self.subtitleLabel = SubtitleLabel(
             self.tr('HomeInterface.Subtitle', (user,)), self.scrollWidget)
         self.quickLabel = StrongBodyLabel(self.tr('HomeInterface.QuickActions'), self.scrollWidget)
@@ -109,14 +106,17 @@ class HomeInterface(ScrollArea):
         logInitialized('Log.Action.HomeInterface')
 
     def updateUserName(self, user_name: str):
-        user_name = (
-            user_name.strip() or cfg.get(cfg.usernameCache) or getuser()
-            if authService.isAuthenticated()
-            else getuser()
-        )
+        user_name = self._displayUserName(user_name)
         self.subtitleLabel.setText(
             self.tr('HomeInterface.Subtitle', (user_name,)))
         logChanged('Log.Action.UserName', user_name, level='debug')
+
+    def _displayUserName(self, user_name=''):
+        if self._forcedUsername:
+            return self._forcedUsername
+        if authService.isAuthenticated():
+            return str(user_name or '').strip() or cfg.get(cfg.usernameCache) or getuser()
+        return getuser()
 
     def refreshCards(self):
         while self.cardsLayout.count():
@@ -160,4 +160,3 @@ class HomeInterface(ScrollArea):
         cfg.set(cfg.quickAccessList, repositories[:20])
         self.refreshCards()
         logChanged('Log.Action.QuickAccess', repo)
-

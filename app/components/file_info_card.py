@@ -247,6 +247,18 @@ class FileInfoCard(SimpleCardWidget):
             x = self.width() // 2 - self.ring.width() // 2
             y = self.height() // 2 - self.ring.height() // 2
             self.ring.move(x, y)
+
+        # Fullscreen changes the splitter geometry temporarily.  Persisting
+        # that transient width makes the card take up most of the splitter on
+        # the next launch, even though the user never resized it normally.
+        window = self.window()
+        is_fullscreen = bool(
+            window is not None
+            and callable(getattr(window, 'isFullScreen', None))
+            and window.isFullScreen()
+        )
+        if is_fullscreen:
+            return
         cfg.set(cfg.fileCardWidth, self.width())
 
     def currentFileName(self):
@@ -277,6 +289,7 @@ class FileInfoCard(SimpleCardWidget):
             self.iconWidget.setIcon(getFolderTypeIcon())
             self.titleLabel.setText(path.strip('/').split('/')[-1])
             self.typeLabel.setText(getFolderTypeName())
+            self.fileToolBar.copyDirectLinkBtn.setEnabled(False)
             self.toolBarStackedWidget.setCurrentIndex(2)
 
     def _onLoadFinished(self, f):
@@ -329,6 +342,10 @@ class FileInfoCard(SimpleCardWidget):
         self.titleLabel.setText(self.tr('FileInfoCard.Repo', (repo,)))
         self.typeLabel.setText(self.tr('FileInfoCard.Branch', (branch,)))
         self.toolBarStackedWidget.setCurrentIndex(0)
+        # The file toolbar may still hold enabled state from the previous
+        # selection even though it is now hidden.  Reset the direct-link
+        # action so a subsequent refresh cannot expose stale file controls.
+        self.fileToolBar.copyDirectLinkBtn.setEnabled(False)
         self.repoToolBar.onRepoChanged(repo)
         self.fileToolBar.onRepoChanged(repo)
         self.dirToolBar.onRepoChanged(repo)
@@ -340,4 +357,4 @@ class FileInfoCard(SimpleCardWidget):
         self.titleLabel.clear()
         self.typeLabel.clear()
         self.toolBarStackedWidget.setCurrentIndex(3)
-
+        self.fileToolBar.copyDirectLinkBtn.setEnabled(False)

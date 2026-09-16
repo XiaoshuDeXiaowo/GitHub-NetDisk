@@ -134,6 +134,8 @@ class AddRepo(MessageBoxBase):
         self.viewLayout.addWidget(self.addExistRepoCard)
 
         self.hideYesButton()
+
+        self.cancelButton.setText(self.tr('AddRepo.CancelButton'))
         self.rejected.connect(lambda: logCancelled('Log.Action.AddRepository'))
 
         self.createRepoCard.clicked.connect(self.onCreateRepo)
@@ -141,6 +143,19 @@ class AddRepo(MessageBoxBase):
 
         self.widget.setMinimumWidth(300)
         logInitialized('Log.Action.AddRepository')
+
+    def _clearDisabledCardEffect(self):
+        self.createRepoCard.clearDisabledVisual()
+
+    def reject(self):
+        # Remove the effect before QDialog starts its close/overlay sequence.
+        self._clearDisabledCardEffect()
+        super().reject()
+
+    def closeEvent(self, event):
+        # Covers window-manager close and programmatic close().
+        self._clearDisabledCardEffect()
+        super().closeEvent(event)
 
     @staticmethod
     def canCreateRepository():
@@ -270,6 +285,10 @@ class AddExistRepo(MessageBoxBase):
         super().__init__(parent=parent)
         self.tr = translate
         self.titleLabel = SubtitleLabel(self.tr('AddExistRepo.title'), self)
+        self._checkTimer = QTimer(self)
+        self._checkTimer.setSingleShot(True)
+        self._checkTimer.setInterval(450)
+        self._checkTimer.timeout.connect(self._checkCurrentRepo)
 
         self.hBoxLayout = QHBoxLayout()
         self.nameLineEdit = LineEdit(self)
@@ -309,19 +328,43 @@ class AddExistRepo(MessageBoxBase):
         logInitialized('Log.Action.AddExistingRepository')
         
     def onNameChanged(self, text):
-        if not text:
+        self._checkTimer.stop()
+        if not text.strip():
             self.stackedWidget.setCurrentIndex(0)
             self.yesButton.setEnabled(False)
             return
-        logStarted('Log.Action.Repository', text, level='debug')
         self.stackedWidget.setCurrentIndex(1)
         self.yesButton.setEnabled(False)
+        # Avoid a GitHub API request for every keystroke.  The current value
+        # is captured when the timer fires, and the result callback still
+        # verifies that the user has not edited the field in the meantime.
+        self._checkTimer.start()
 
-        future = TaskExecutor.run(self.isRepoExists, text)
-        future.result.connect(lambda r, value=text: self._onRepoChecked(value, r))
+    def _checkCurrentRepo(self):
+        value = self.nameLineEdit.text().strip()
+        if not value:
+            self.stackedWidget.setCurrentIndex(0)
+            self.yesButton.setEnabled(False)
+            return
+        logStarted('Log.Action.Repository', value, level='debug')
+        future = TaskExecutor.run(self.isRepoExists, value)
+        future.result.connect(lambda r, checked=value: self._onRepoChecked(checked, r))
+        future.failed.connect(
+            lambda error, checked=value: self._onRepoCheckFailed(checked, error))
+
+    def _onRepoCheckFailed(self, value: str, error):
+        if value != self.nameLineEdit.text().strip():
+            return
+        self.stackedWidget.setCurrentIndex(3)
+        self.yesButton.setEnabled(False)
+        logFailed(
+            'Log.Action.Repository',
+            exceptionDetail(unwrapFutureError(error), value),
+            level='debug',
+        )
 
     def _onRepoChecked(self, value: str, exists: bool):
-        if value != self.nameLineEdit.text():
+        if value != self.nameLineEdit.text().strip():
             return
         self.stackedWidget.setCurrentIndex(2 if exists else 3)
         self.yesButton.setEnabled(exists)

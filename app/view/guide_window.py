@@ -3,12 +3,13 @@ import sys
 from threading import Event
 
 from loguru import logger
-from PyQt5.QtCore import QSize, Qt, QTimer
+from PyQt5.QtCore import QEvent, QSize, Qt, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (QApplication, QWidget, QHBoxLayout, QVBoxLayout,
                              QStackedWidget, QSizePolicy)
 from pyqt5_concurrent.TaskExecutor import TaskExecutor
 from qfluentwidgets import (FluentWidget, SplashScreen, TitleLabel, BodyLabel,
+                            CaptionLabel,
                             PasswordLineEdit, CardWidget, OpacityAniStackedWidget, IconWidget,
                             FluentIcon, SubtitleLabel, TransparentToolButton, HyperlinkButton,
                             PushButton, PrimaryPushButton, ToolTipPosition, MessageBox, InfoBar,
@@ -52,6 +53,9 @@ class WelcomeInterface(QWidget):
         self.guideLabel = TitleLabel(self.tr('GuideWindow.Welcome'), self)
         self.bodyLabel = BodyLabel(self.tr('GuideWindow.text'), self)
         self.bodyLabel.setWordWrap(True)
+        self.disclaimerLabel = CaptionLabel(
+            self.tr('GuideWindow.Disclaimer'), self)
+        self.disclaimerLabel.setWordWrap(True)
 
         self.githubAppCardWidget = CardWidget(self)
         self.githubAppCardWidget.setMinimumHeight(96)
@@ -110,6 +114,8 @@ class WelcomeInterface(QWidget):
         self.expandLayout.addWidget(self.tokenCardWidget)
         self.expandLayout.addStretch(1)
         self.expandLayout.addSpacing(16)
+        self.expandLayout.addWidget(self.disclaimerLabel)
+        self.expandLayout.addSpacing(8)
         self.expandLayout.addWidget(self.notLoginButton, 0, Qt.AlignLeft)
 
 class GitHubAppLoginInterface(QWidget):
@@ -402,9 +408,10 @@ class TokenLoginInterface(QWidget):
 
 class GuideWindow(FluentWidget):
 
-    def __init__(self, parent = None):
+    def __init__(self, parent=None, forced_username=None):
         super().__init__(parent=parent)
         self.tr = translate
+        self._forcedUsername = str(forced_username or '').strip()
         logger.info(self.tr('Log.GuideWindow.Initialize.Start'))
 
         # create system theme listener
@@ -485,6 +492,17 @@ class GuideWindow(FluentWidget):
             else 'MenuBar.EnterFullScreen'
         )
         logAction('Log.Action.MenuBar', self.tr(action_key))
+
+        # Keep the welcome window on the same AppKit fullscreen path as the
+        # main window.  Qt's showFullScreen()/showNormal() path can leave
+        # Cocoa cursor tracking stale after the transition on macOS.
+        if sys.platform == 'darwin':
+            native_window = MainWindow._nativeMacWindow()
+            if native_window is not None:
+                native_window.toggleFullScreen_(None)
+                self._scheduleCursorRefresh()
+                return
+
         if self.isFullScreen():
             self.showNormal()
         else:
@@ -525,7 +543,8 @@ class GuideWindow(FluentWidget):
         if ok:
             logSucceeded('Log.Action.Login', self.tr('GuideWindow.notLoginButton.text'))
             authService.disconnect()
-            self.mainWindow = MainWindow()
+            self.mainWindow = MainWindow(
+                forced_username=self._forcedUsername)
             QApplication.instance().aboutToQuit.connect(self.mainWindow.onExit)
             self.mainWindow.show()
             stopSystemThemeListener(self.themeListener)
@@ -537,7 +556,8 @@ class GuideWindow(FluentWidget):
     def onAuthenticated(self, identity):
         cfg.set(cfg.firstUse, False)
         signalBus.userNameChanged.emit(identity.name)
-        self.mainWindow = MainWindow()
+        self.mainWindow = MainWindow(
+            forced_username=self._forcedUsername)
         QApplication.instance().aboutToQuit.connect(self.mainWindow.onExit)
         self.mainWindow.show()
         stopSystemThemeListener(self.themeListener)
@@ -584,6 +604,23 @@ class GuideWindow(FluentWidget):
             self.stackedWidget.move(0, self.titleBar.height())
             self.stackedWidget.resize(
                 self.width(), max(0, self.height() - self.titleBar.height()))
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if sys.platform == 'darwin' and event.type() == QEvent.WindowStateChange:
+            self._scheduleCursorRefresh()
+
+    def _scheduleCursorRefresh(self):
+        for delay in (0, 350, 800):
+            QTimer.singleShot(delay, self._refreshWidgetCursors)
+
+    def _refreshWidgetCursors(self):
+        for widget in (self, *self.findChildren(QWidget)):
+            if not widget.testAttribute(Qt.WA_SetCursor):
+                continue
+            cursor = widget.cursor()
+            widget.unsetCursor()
+            widget.setCursor(cursor)
 
     def closeEvent(self, e):
         if hasattr(self, 'githubAppLoginInterface'):

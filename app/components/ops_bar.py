@@ -49,6 +49,10 @@ class OpsBar(CommandBar):
         self.addSeparator()
         self.renameAction = self.addButton(Icon.RENAME, self.tr('OpsBar.Rename'), signalBus.renameSig)
         self.deleteAction = self.addButton(FIF.DELETE, self.tr('OpsBar.Delete'), signalBus.deleteSig)
+        
+        self.downloadAction.setEnabled(False)
+        self.renameAction.setEnabled(False)
+        self.deleteAction.setEnabled(False)
         self.addSeparator()
         self.refreshAction = self.addButton(FIF.SYNC, self.tr('OpsBar.Refresh'), signalBus.refreshSig)
 
@@ -91,5 +95,4 @@ class OpsBar(CommandBar):
     def onCreateFolder(self):
         logAction('Log.Action.CreateFolder')
         signalBus.createNewFolderSig.emit()
-
 
