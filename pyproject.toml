@@ -4,7 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "GitHub-NetDisk"
-version = "0.0.1"
+# Since pyproject.toml does not support version stages,
+# the first part of the version number is used as the version stage.
+version = "0.0.0.1"
 description = "A Fluent desktop cloud-drive client backed by GitHub Release"
 readme = "README.md"
 requires-python = ">=3.8"
