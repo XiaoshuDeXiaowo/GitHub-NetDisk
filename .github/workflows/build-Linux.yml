@@ -14,9 +14,9 @@ jobs:
           - runner: ubuntu-22.04
             architecture: x86_64
             deb_arch: amd64
-          - runner: ubuntu-24.04-arm
-            architecture: arm64
-            deb_arch: arm64
+          # - runner: ubuntu-24.04-arm
+          #   architecture: arm64
+          #   deb_arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4

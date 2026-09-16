@@ -8,8 +8,8 @@ on:
 jobs:
   windows:
     uses: ./.github/workflows/build-Windows.yml
-  windows-arm:
-    uses: ./.github/workflows/build-Windows-ARM.yml
+  # windows-arm:
+  #   uses: ./.github/workflows/build-Windows-ARM.yml
   linux:
     uses: ./.github/workflows/build-Linux.yml
   macos-arm:
@@ -17,7 +17,7 @@ jobs:
   macos-intel:
     uses: ./.github/workflows/build-macOS-Intel.yml
   publish:
-    needs: [windows, windows-arm, linux, macos-arm, macos-intel]
+    needs: [windows, linux, macos-arm, macos-intel]
     runs-on: ubuntu-latest
     permissions:
       contents: write
